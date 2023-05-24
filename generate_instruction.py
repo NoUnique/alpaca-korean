@@ -143,6 +143,9 @@ def generate_instruction_following_data(
     top_p=1.0,
     num_cpus=16,
 ):
+    if model_name.startswith("gpt"):
+        request_batch_size = 1
+
     seed_tasks = [json.loads(l) for l in open(seed_tasks_path, "r")]
     seed_instruction_data = [
         {"instruction": t["instruction"], "input": t["instances"][0]["input"], "output": t["instances"][0]["output"]}
@@ -199,13 +202,17 @@ def generate_instruction_following_data(
         )
         request_duration = time.time() - request_start
 
-        # tempfile_created = time.strftime("%Y%m%d-%H%M%S")
-        # tempfile_path = os.path.join(output_dir, "tempfiles", f"temp_{tempfile_created}.txt")
-        # os.makedirs(os.path.dirname(tempfile_path), exist_ok=True)
-        # with open(tempfile_path, "w") as f:
-        #     for result in results:
-        #         if type(result) is str:
-        #             f.write(result + "\n\n\n")
+        if model_name.startswith("gpt"):
+            for result in results:
+                result["text"] = result["message"]["content"]
+
+        tempfile_created = time.strftime("%Y%m%d-%H%M%S")
+        tempfile_path = os.path.join(output_dir, "tempfiles", f"temp_{tempfile_created}.txt")
+        os.makedirs(os.path.dirname(tempfile_path), exist_ok=True)
+        with open(tempfile_path, "w") as f:
+            for result in results:
+                if type(result["text"]) is str:
+                    f.write(result["text"] + "\n\n\n")
 
         process_start = time.time()
         instruction_data = []

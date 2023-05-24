@@ -103,7 +103,16 @@ def openai_completion(
                     **batch_decoding_args.__dict__,
                     **decoding_kwargs,
                 )
-                completion_batch = openai.Completion.create(prompt=prompt_batch, **shared_kwargs)
+                if model_name.startswith("gpt"):
+                    del shared_kwargs["suffix"]
+                    del shared_kwargs["logprobs"]
+                    del shared_kwargs["echo"]
+                    completion_batch = openai.ChatCompletion.create(
+                        messages=[{"role": "user", "content": prompt} for prompt in prompt_batch], **shared_kwargs
+                    )
+                else:
+                    completion_batch = openai.Completion.create(prompt=prompt_batch, **shared_kwargs)
+
                 choices = completion_batch.choices
 
                 for choice in choices:
@@ -112,7 +121,7 @@ def openai_completion(
                 break
             except openai.error.OpenAIError as e:
                 logging.warning(f"OpenAIError: {e}.")
-                if "Please reduce your prompt" in str(e):
+                if "Please reduce your prompt" in str(e) or "Please reduce the length" in str(e):
                     batch_decoding_args.max_tokens = int(batch_decoding_args.max_tokens * 0.8)
                     logging.warning(f"Reducing target length to {batch_decoding_args.max_tokens}, Retrying...")
                 else:
@@ -120,7 +129,10 @@ def openai_completion(
                     time.sleep(sleep_time)  # Annoying rate limit on requests.
 
     if return_text:
-        completions = [completion.text for completion in completions]
+        if model_name.startswith("gpt"):
+            completions = [completion.message.content for completion in completions]
+        else:
+            completions = [completion.text for completion in completions]
     if decoding_args.n > 1:
         # make completions a nested list, where each entry is a consecutive decoding_args.n of original entries.
         completions = [completions[i : i + decoding_args.n] for i in range(0, len(completions), decoding_args.n)]
